@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: homeassistant/home-assistant:stable # Используем стабильную версию Home Assistant
+    volumes:
+      - /udobnidom/homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro         # Для Bluetooth, NetworkManager и других системных служб
+      - /var/run/docker.sock:/var/run/docker.sock:ro # !!! ОЧЕНЬ ОПАСНО !!! Дает полный контроль над Docker на хосте
+      - /dev/shm:/dev/shm
+    network_mode: host #<---ВАЖНО: Home Assistant работает напрямую в сети хоста
+    restart: unless-stopped
+    privileged: true #<---ВАЖНО: Дает максимальные доступы, необходимые для обнаружения устройств
