@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  esphome-editor:
+    image: morcatko/esphome-editor:latest
+    container_name: esphome-editor
+    network_mode: host
+    privileged: true
+    cap_add: [ALL]
+    volumes:
+      - /udobnidom/esphome-editor/data:/data # Мапируем папку для данных esphome-editor
+    restart: unless-stopped
