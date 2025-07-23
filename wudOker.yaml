@@ -9,4 +9,4 @@ services:
       - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED=true
       - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY=true
     ports:
-      - 3001:3000
+      - 3006:3000
