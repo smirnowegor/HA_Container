@@ -5,10 +5,10 @@ services:
     container_name: zigbee2mqtt
     image: koenkk/zigbee2mqtt:latest
     volumes:
-      - /udobnidom/zigbee2mqtt/data:/app/data  # конфиги
-      - /run/udev:/run/udev:ro  # доступ к USB
+      - /udobnidom/zigbee2mqtt/data:/app/data  
+      - /run/udev:/run/udev:ro  
     devices:
-      - /dev/ttyUSB0:/dev/ttyACM0  # источник -> цель
+      - /dev/ttyUSB0:/dev/ttyACM0  
     environment:
       - TZ=Europe/Moscow
       - MQTT_SERVER=mqtt://mosquitto
