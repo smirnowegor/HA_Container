@@ -17,7 +17,7 @@ services:
     networks:
       - homeiot_internal
     env_file:
-      - ../stack.env
+      - stack.env
 networks:
   homeiot_internal:
     external: true
