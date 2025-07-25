@@ -16,8 +16,8 @@ services:
     privileged: true
     networks:
       - homeiot_internal
-    # env_file:
-    #   - stack.env
+    env_file:
+      - ../stack.env
 networks:
   homeiot_internal:
     external: true
