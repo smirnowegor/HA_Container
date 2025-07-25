@@ -18,6 +18,8 @@ services:
     privileged: true # Может потребоваться для доступа к USB-стику
     networks:
       - homeiot_internal
+    env_file:
+      - stack.env      
 networks:
   homeiot_internal:
     external: true
