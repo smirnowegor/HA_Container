@@ -9,5 +9,7 @@ services:
       - /dev/ttyUSB0:/dev/ttyUSB0 # <-- Раскомментируй, если используешь USB-адаптер для прошивки
       # Добавь другие /dev/ttyUSBx, если у тебя несколько адаптеров
     network_mode: host #<---ВАЖНО: для OTA-обновлений и обнаружения устройств
+    env_file:
+      - stack.env
     restart: unless-stopped
     privileged: true #<---ВАЖНО: для доступа к USB-портам и полноценной работы в host-сети
