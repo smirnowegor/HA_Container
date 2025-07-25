@@ -8,4 +8,6 @@ services:
     cap_add: [ALL]
     volumes:
       - /udobnidom/esphome-editor/data:/data # Мапируем папку для данных esphome-editor
+    env_file:
+      - stack.env
     restart: unless-stopped
