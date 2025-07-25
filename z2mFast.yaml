@@ -1,5 +1,3 @@
-# version: '3.8'
-
 services:
   zigbee2mqtt:
     container_name: zigbee2mqtt
