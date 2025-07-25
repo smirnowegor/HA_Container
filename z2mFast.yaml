@@ -7,7 +7,7 @@ services:
       - /udobnidom/zigbee2mqtt/data:/app/data # Здесь будет храниться configuration.yaml и другие данные
       - /run/udev:/run/udev:ro # Для доступа к USB-портам
     devices:
-      - /dev/ttyUSB0:/dev/ttyACM0 #<---ИСПОЛЬЗУЕМ /dev/ttyUSB0 как источник, /dev/ttyACM0 как цель в контейнере
+      - /dev/ttyUSB0:/dev/ttyACM0 
     environment:
       - TZ=Europe/Moscow # <-- ЗАМЕНИ НА СВОЮ ВРЕМЕННУЮ ЗОНУ (Moldova)
       - MQTT_SERVER=mqtt://mosquitto # Указываем адрес Mosquitto по имени сервиса (доступ через внутреннюю сеть Docker)
