@@ -8,5 +8,7 @@ services:
       - WUD_TRIGGER_MQTT_MOSQUITTO_URL=mqtt://192.168.1.74:1883
       - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED=true
       - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY=true
+    env_file:
+      - stack.env
     ports:
       - 3006:3000
