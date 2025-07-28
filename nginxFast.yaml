@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+
+    # вместо портов и сетей говорим “слушай на всех интерфейсах хоста”
+    network_mode: host
+
+    volumes:
+      - /udobnidom/nginx-proxy-manager/data:/data
+      - /udobnidom/nginx-proxy-manager/letsencrypt:/etc/letsencrypt
