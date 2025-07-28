@@ -10,5 +10,6 @@ services:
       - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY=true
     env_file:
       - stack.env
+    restart: unless-stopped
     ports:
       - 3006:3000
