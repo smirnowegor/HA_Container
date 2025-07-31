@@ -1,130 +1,132 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo "--- Начинаем настройку Mosquitto и Zigbee2MQTT ---"
 
-# --- Создание Docker сети ---
-echo "Проверяем и создаем Docker сеть 'homeiot_internal'..."
-sudo docker network create homeiot_internal || true
-echo "Docker сеть 'homeiot_internal' готова."
+# --- Создание Docker-сети ---
+echo "Проверяем и создаем Docker-сеть 'homeiot_internal'…"
+sudo docker network create homeiot_internal >/dev/null 2>&1 || true
+echo "Docker-сеть готова."
+
+# --- Функция поиска USB-адаптера по /dev/serial/by-id ---
+get_serial_path() {
+  local filter="$1" candidates=()
+  for link in /dev/serial/by-id/*; do
+    [[ -e "$link" ]] || continue
+    [[ -n "$filter" && "$link" != *"$filter"* ]] && continue
+    candidates+=( "$(readlink -f "$link")" )
+  done
+
+  if (( ${#candidates[@]} == 1 )); then
+    echo "${candidates[0]}"
+  elif (( ${#candidates[@]} > 1 )); then
+    echo "Найдено несколько устройств (`$filter`):"
+    for i in "${!candidates[@]}"; do
+      echo "  $((i+1))) ${candidates[i]}"
+    done
+    read -p "Выберите номер [1]: " idx
+    idx=${idx:-1}
+    echo "${candidates[idx-1]}"
+  else
+    # ни одного не нашли
+    echo ""
+  fi
+}
 
 # --- 1. Настройка Mosquitto ---
 echo "--- 1. Настройка Mosquitto ---"
 sudo mkdir -p /udobnidom/mosquitto/{config,data,logs}
-cat <<EOL | sudo tee /udobnidom/mosquitto/config/mosquitto.conf > /dev/null
+
+cat <<EOF | sudo tee /udobnidom/mosquitto/config/mosquitto.conf >/dev/null
 persistence true
 persistence_location /mosquitto/data/
 log_dest file /mosquitto/log/mosquitto.log
 allow_anonymous true
+
 listener 1883
 protocol mqtt
+
 listener 9001
 protocol websockets
-EOL
-echo "Mosquitto настроен."
+EOF
+
+echo "✔ Mosquitto настроен."
 
 # --- 2. Настройка Zigbee2MQTT ---
 echo "--- 2. Настройка Zigbee2MQTT ---"
 sudo mkdir -p /udobnidom/zigbee2mqtt/data
 
-echo ""
-echo "Выберите модель Zigbee-адаптера:"
-echo "1) Sonoff Zigbee 3.0 USB Dongle Plus V2 (Ember)"
-echo "2) SLZB-06P7 по TCP"
-echo "3) SLZB-06P7 по USB"
-read -p "Введите номер (1-3): " STICK_MODEL
+cat <<EOF
 
-# Значения по умолчанию для SLZB-06P7
-DEFAULT_SLZB_ADAPTER="zstack"
-DEFAULT_SLZB_LED="false"
+Выберите модель Zigbee-адаптера:
+ 1) Sonoff Zigbee 3.0 USB Dongle Plus V2 (EZSP)
+ 2) SLZB-06P7 по TCP
+ 3) SLZB-06P7 по USB
+EOF
+
+read -p "Номер (1–3) [3]: " STICK_MODEL
+STICK_MODEL=${STICK_MODEL:-3}
 
 case "$STICK_MODEL" in
   1)
-    echo "Настройка Sonoff Zigbee 3.0 USB Dongle Plus V2 (Ember)..."
-    ADAPTER_TYPE= ember
+    echo "Настройка Sonoff EZSP-донгла…"
+    ADAPTER_TYPE="ezsp"
     DEFAULT_BAUD=115200
 
-    # Поиск USB-устройства
-    SERIAL_DEVICES=$(ls -l /dev/serial/by-id/ 2>/dev/null | awk '{print $9 " -> " $11}')
-    if [ -z "$SERIAL_DEVICES" ]; then
-      read -p "Путь к устройству (например, /dev/ttyUSB0): " USER_PATH
-      ZIGBEE_PATH=${USER_PATH:-/dev/ttyUSB0}
-    else
-      if [ "$(echo "$SERIAL_DEVICES" | wc -l)" -eq 1 ]; then
-        NODE=$(echo "$SERIAL_DEVICES" | awk -F'-> ../../' '{print $2}')
-        ZIGBEE_PATH="/dev/$NODE"
-      else
-        echo "Найдено несколько устройств:"
-        echo "$SERIAL_DEVICES"
-        read -p "Введите полный путь: " USER_PATH
-        ZIGBEE_PATH=${USER_PATH:-/dev/ttyUSB0}
-      fi
+    # попробуем найти любой /dev/serial/by-id
+    ZIGBEE_PATH=$(get_serial_path "")
+    if [[ -z "$ZIGBEE_PATH" ]]; then
+      echo "Не найден /dev/serial/by-id/*, ставим /dev/ttyUSB0 по-умолчанию."
+      ZIGBEE_PATH="/dev/ttyUSB0"
     fi
 
-    read -p "Введите baudrate [${DEFAULT_BAUD}]: " USER_BAUDRATE
-    BAUDRATE=${USER_BAUDRATE:-$DEFAULT_BAUD}
-
+    BAUDRATE=$DEFAULT_BAUD
     DISABLE_LED=""  # не используется
     ;;
 
   2)
-    echo "Настройка SLZB-06P7 по TCP..."
-    ADAPTER_TYPE=${DEFAULT_SLZB_ADAPTER}
+    echo "Настройка SLZB-06P7 по TCP…"
+    ADAPTER_TYPE="zstack"
     read -p "IP-адрес устройства: " SLZB_IP
-    read -p "Порт устройства [6638]: " SLZB_PORT
+    read -p "Порт [6638]: " SLZB_PORT
     SLZB_PORT=${SLZB_PORT:-6638}
+
     ZIGBEE_PATH="tcp://${SLZB_IP}:${SLZB_PORT}"
-
-    read -p "Введите baudrate [460800]: " USER_BAUDRATE
-    BAUDRATE=${USER_BAUDRATE:-460800}
-
-    DISABLE_LED="disable_led: ${DEFAULT_SLZB_LED}"
+    DEFAULT_BAUD=460800
+    BAUDRATE=$DEFAULT_BAUD
+    DISABLE_LED="disable_led: false"
     ;;
 
   3)
-    echo "Настройка SLZB-06P7 по USB..."
-    ADAPTER_TYPE=${DEFAULT_SLZB_ADAPTER}
+    echo "Настройка SLZB-06P7 по USB…"
+    ADAPTER_TYPE="zstack"
+    DEFAULT_BAUD=460800
 
-    # Поиск SLZB-06P7 в /dev/serial/by-id
-    SLZB_DEVICES=$(ls -l /dev/serial/by-id/ 2>/dev/null \
-      | grep -i SLZB-06P7 \
-      | awk '{print $9 " -> " $11}')
-    if [ -z "$SLZB_DEVICES" ]; then
-      read -p "Путь к USB-устройству SLZB-06P7: " USER_PATH
-      ZIGBEE_PATH=${USER_PATH:-/dev/ttyUSB0}
-    else
-      if [ "$(echo "$SLZB_DEVICES" | wc -l)" -eq 1 ]; then
-        NODE=$(echo "$SLZB_DEVICES" | awk -F'-> ../../' '{print $2}')
-        ZIGBEE_PATH="/dev/$NODE"
-      else
-        echo "Найдено несколько SLZB-06P7:"
-        echo "$SLZB_DEVICES"
-        read -p "Введите путь из списка: " USER_PATH
-        ZIGBEE_PATH=${USER_PATH:-/dev/ttyUSB0}
-      fi
+    ZIGBEE_PATH=$(get_serial_path "SLZB-06P7")
+    if [[ -z "$ZIGBEE_PATH" ]]; then
+      echo "Не найден SLZB-06P7 в /dev/serial/by-id, ставим /dev/ttyUSB0."
+      ZIGBEE_PATH="/dev/ttyUSB0"
     fi
 
-    read -p "Введите baudrate [460800]: " USER_BAUDRATE
-    BAUDRATE=${USER_BAUDRATE:-460800}
-
-    DISABLE_LED="disable_led: ${DEFAULT_SLZB_LED}"
+    BAUDRATE=$DEFAULT_BAUD
+    DISABLE_LED="disable_led: false"
     ;;
 
   *)
-    echo "Некорректный выбор. Скрипт будет завершён."
+    echo "Неверный выбор. Завершаем."
     exit 1
     ;;
 esac
 
 echo ""
-echo "Итоги настройки:"
-echo "  Путь:       ${ZIGBEE_PATH}"
-echo "  Baudrate:   ${BAUDRATE}"
-echo "  Adapter:    ${ADAPTER_TYPE}"
-[ -n "$DISABLE_LED" ] && echo "  ${DISABLE_LED}"
+echo "Итоги:"
+echo "  serial.port     = ${ZIGBEE_PATH}"
+echo "  serial.adapter  = ${ADAPTER_TYPE}"
+echo "  serial.baudrate = ${BAUDRATE}"
+[[ -n "$DISABLE_LED" ]] && echo "  ${DISABLE_LED}"
 
-# Генерация configuration.yaml
-cat <<EOL | sudo tee /udobnidom/zigbee2mqtt/data/configuration.yaml > /dev/null
+# --- Запись configuration.yaml ---
+cat <<EOF | sudo tee /udobnidom/zigbee2mqtt/data/configuration.yaml >/dev/null
 homeassistant:
   enabled: true
 
@@ -136,7 +138,7 @@ serial:
   adapter: '${ADAPTER_TYPE}'
   baudrate: ${BAUDRATE}
   rtscts: false
-${DISABLE_LED}
+${DISABLE_LED:+  $DISABLE_LED}
 
 frontend:
   enabled: true
@@ -151,8 +153,6 @@ advanced:
   network_key: GENERATE
 
 data_path: /app/data
-EOL
+EOF
 
-echo "--- Настройка Mosquitto и Zigbee2MQTT завершена! ---"
-cd ~
-echo "Скрипт завершен. Вы в домашней директории."
+echo "--- Скрипт завершён. Mosquitto и Zigbee2MQTT готовы к запуску. ---"
