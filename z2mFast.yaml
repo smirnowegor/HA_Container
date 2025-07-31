@@ -5,8 +5,8 @@ services:
     volumes:
       - /udobnidom/zigbee2mqtt/data:/app/data
       - /run/udev:/run/udev:ro
-    devices:
-      - /dev/ttyUSB0:/dev/ttyACM0
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyACM0
     environment:
       - TZ=Europe/Moscow
       - MQTT_SERVER=mqtt://mosquitto
