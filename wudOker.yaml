@@ -7,7 +7,7 @@ services:
     networks:
       - homeiot_internal
     environment:
-      WUD_TRIGGER_MQTT_MOSQUITTO_URL: mqtt://192.168.1.105:1883
+      WUD_TRIGGER_MQTT_MOSQUITTO_URL: mqtt://host.docker.internal:1883
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED: "true"
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY: "true"
     volumes:
