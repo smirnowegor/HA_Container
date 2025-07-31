@@ -1,15 +1,23 @@
+version: "3.8"
+
 services:
-  whatsupdocker:
+  wud:
     image: getwud/wud
     container_name: wud
+    networks:
+      - homeiot_internal
+    links:
+      - mosquitto
+    environment:
+      WUD_TRIGGER_MQTT_MOSQUITTO_URL: mqtt://${MOSQUITTO_PORT_1883_TCP_ADDR}:1883
+      WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED: "true"
+      WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - WUD_TRIGGER_MQTT_MOSQUITTO_URL=mqtt://mosquitto:1883
-      - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED=true
-      - WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY=true
-    env_file:
-      - stack.env
-    restart: unless-stopped
     ports:
-      - 3006:3000
+      - "3006:3000"
+    restart: unless-stopped
+
+networks:
+  homeiot_internal:
+    external: true
