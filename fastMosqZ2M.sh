@@ -8,7 +8,7 @@ echo "Проверяем и создаем Docker-сеть 'homeiot_internal'…
 sudo docker network create homeiot_internal >/dev/null 2>&1 || true
 echo "Docker-сеть готова."
 
-# --- Функция поиска USB-адаптера по /dev/serial/by-id ---
+# --- Функция для поиска USB-адаптера в /dev/serial/by-id ---
 get_serial_path() {
   local filter="$1" candidates=()
   for link in /dev/serial/by-id/*; do
@@ -20,15 +20,14 @@ get_serial_path() {
   if (( ${#candidates[@]} == 1 )); then
     echo "${candidates[0]}"
   elif (( ${#candidates[@]} > 1 )); then
-    echo "Найдено несколько устройств (`$filter`):"
+    echo "Найдено несколько устройств ($filter):"
     for i in "${!candidates[@]}"; do
       echo "  $((i+1))) ${candidates[i]}"
     done
-    read -p "Выберите номер [1]: " idx
+    read -r -p "Выберите номер [1]: " idx
     idx=${idx:-1}
     echo "${candidates[idx-1]}"
   else
-    # ни одного не нашли
     echo ""
   fi
 }
@@ -64,7 +63,7 @@ cat <<EOF
  3) SLZB-06P7 по USB
 EOF
 
-read -p "Номер (1–3) [3]: " STICK_MODEL
+read -r -p "Номер (1-3) [3]: " STICK_MODEL
 STICK_MODEL=${STICK_MODEL:-3}
 
 case "$STICK_MODEL" in
@@ -73,30 +72,27 @@ case "$STICK_MODEL" in
     ADAPTER_TYPE="ezsp"
     DEFAULT_BAUD=115200
 
-    # попробуем найти любой /dev/serial/by-id
     ZIGBEE_PATH=$(get_serial_path "")
     if [[ -z "$ZIGBEE_PATH" ]]; then
-      echo "Не найден /dev/serial/by-id/*, ставим /dev/ttyUSB0 по-умолчанию."
+      echo "Не найден /dev/serial/by-id, берём /dev/ttyUSB0."
       ZIGBEE_PATH="/dev/ttyUSB0"
     fi
 
-    BAUDRATE=$DEFAULT_BAUD
-    DISABLE_LED=""  # не используется
+    DISABLE_LED=""
     ;;
-
   2)
     echo "Настройка SLZB-06P7 по TCP…"
     ADAPTER_TYPE="zstack"
-    read -p "IP-адрес устройства: " SLZB_IP
-    read -p "Порт [6638]: " SLZB_PORT
+    read -r -p "IP-адрес устройства: " SLZB_IP
+    SLZB_IP=${SLZB_IP//$'\r'/}
+
+    read -r -p "Порт [6638]: " SLZB_PORT
     SLZB_PORT=${SLZB_PORT:-6638}
 
     ZIGBEE_PATH="tcp://${SLZB_IP}:${SLZB_PORT}"
     DEFAULT_BAUD=460800
-    BAUDRATE=$DEFAULT_BAUD
     DISABLE_LED="disable_led: false"
     ;;
-
   3)
     echo "Настройка SLZB-06P7 по USB…"
     ADAPTER_TYPE="zstack"
@@ -108,22 +104,25 @@ case "$STICK_MODEL" in
       ZIGBEE_PATH="/dev/ttyUSB0"
     fi
 
-    BAUDRATE=$DEFAULT_BAUD
     DISABLE_LED="disable_led: false"
     ;;
-
   *)
-    echo "Неверный выбор. Завершаем."
+    echo "Неверный выбор. Выход."
     exit 1
     ;;
 esac
 
-echo ""
-echo "Итоги:"
-echo "  serial.port     = ${ZIGBEE_PATH}"
-echo "  serial.adapter  = ${ADAPTER_TYPE}"
-echo "  serial.baudrate = ${BAUDRATE}"
-[[ -n "$DISABLE_LED" ]] && echo "  ${DISABLE_LED}"
+# --- Выбор Baudrate ---
+read -r -p "Введите baudrate [${DEFAULT_BAUD}]: " INPUT_BAUD
+INPUT_BAUD=${INPUT_BAUD//$'\r'/}
+BAUDRATE=${INPUT_BAUD:-$DEFAULT_BAUD}
+
+# --- Итоги ---
+printf "\nИтоги конфигурации:\n"
+printf "  serial.port     = %s\n" "${ZIGBEE_PATH}"
+printf "  serial.adapter  = %s\n" "${ADAPTER_TYPE}"
+printf "  serial.baudrate = %s\n" "${BAUDRATE}"
+[[ -n "$DISABLE_LED" ]] && printf "  %s\n" "${DISABLE_LED}"
 
 # --- Запись configuration.yaml ---
 cat <<EOF | sudo tee /udobnidom/zigbee2mqtt/data/configuration.yaml >/dev/null
