@@ -41,7 +41,7 @@ DEFAULT_SLZB_LED="false"
 case "$STICK_MODEL" in
   1)
     echo "Настройка Sonoff Zigbee 3.0 USB Dongle Plus V2 (Ember)..."
-    ADAPTER_TYPE="ember"
+    ADAPTER_TYPE= ember
     DEFAULT_BAUD=115200
 
     # Поиск USB-устройства
