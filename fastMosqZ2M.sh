@@ -132,8 +132,7 @@ permit_join: true
 
 # Advanced settings
 advanced:
-  channel: 11
-  pan_id: 0x1aef
+  pan_id: GENERATE
   ext_pan_id: GENERATE
   network_key: GENERATE
 
