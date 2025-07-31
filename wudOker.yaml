@@ -6,10 +6,8 @@ services:
     container_name: wud
     networks:
       - homeiot_internal
-    links:
-      - mosquitto
     environment:
-      WUD_TRIGGER_MQTT_MOSQUITTO_URL: mqtt://${MOSQUITTO_PORT_1883_TCP_ADDR}:1883
+      WUD_TRIGGER_MQTT_MOSQUITTO_URL: mqtt://127.0.0.1:1883
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED: "true"
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY: "true"
     volumes:
