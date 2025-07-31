@@ -4,25 +4,11 @@ services:
   wud:
     image: getwud/wud:latest
     container_name: wud
-    # Вот здесь — inline-скрипт вместо внешнего файла
-    entrypoint: >
-      sh -c "
-        HOST_IP=$(ip route | awk '/default via/ {print \$3}');
-        export WUD_TRIGGER_MQTT_MOSQUITTO_URL=\"mqtt://\$HOST_IP:1883\";
-        echo \"Using MQTT at \$WUD_TRIGGER_MQTT_MOSQUITTO_URL\";
-        exec npm start
-      "
-    networks:
-      - homeiot_internal
+    network_mode: host      # <-- вот этот ключ!
     environment:
-      WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED: "true"
+      WUD_TRIGGER_MQTT_MOSQUITTO_URL: "mqtt://127.0.0.1:1883"
+      WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED:  "true"
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "3006:3000"
     restart: unless-stopped
-
-networks:
-  homeiot_internal:
-    external: true
