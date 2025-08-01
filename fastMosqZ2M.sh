@@ -69,7 +69,7 @@ STICK_MODEL=${STICK_MODEL:-3}
 case "$STICK_MODEL" in
   1)
     echo "Настройка Sonoff EZSP-донгла…"
-    ADAPTER_TYPE="ezsp"
+    ADAPTER_TYPE="ember"
     DEFAULT_BAUD=115200
 
     ZIGBEE_PATH=$(get_serial_path "")
