@@ -1,23 +1,19 @@
-version: '2.1'
+version: '2.4'
 services:
   esphome:
-    container_name: esphome
+    platform: linux/arm64/v8
     image: ghcr.io/esphome/esphome:latest
-    volumes:
-      - /udobnidom/esphome/config:/config
-      - /etc/localtime:/etc/localtime:ro
-      - /dev/ttyUSB0:/dev/ttyUSB0
+    container_name: esphome
     network_mode: host
     privileged: true
-    env_file:
-      - stack.env
-    restart: unless-stopped
-
-    # (Добавляем/обновляем ресурсы):
-    mem_limit: 1500m
-    memswap_limit: 2500m
-    cpus: "1.5"
-
+    volumes:
+      - /udobnidom/esphome/config:/config
+      - /udobnidom/esphome/pio_cache:/pioenvs
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/ttyUSB0:/dev/ttyUSB0
     environment:
-      # Позволяет parallel сборку с 2 процессами
       - PLATFORMIO_RUN_JOBS=2
+      - PLATFORMIO_CACHE_DIR=/pioenvs
+    mem_limit: 2g
+    memswap_limit: 3g
+    cpus: "3.0"
