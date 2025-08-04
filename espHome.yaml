@@ -1,29 +1,23 @@
-version: '3.8'
+version: '2.1'
 services:
   esphome:
-    image: esphome/esphome:latest   # → можно после тестирования заменить на стабильный тег 2025.6.0
     container_name: esphome
+    image: ghcr.io/esphome/esphome:latest
     volumes:
       - /udobnidom/esphome/config:/config
       - /etc/localtime:/etc/localtime:ro
-      - /dev/ttyUSB0:/dev/ttyUSB0     # или добавить еще ttyUSB*, если нужно
+      - /dev/ttyUSB0:/dev/ttyUSB0
     network_mode: host
     privileged: true
-    restart: unless-stopped
     env_file:
       - stack.env
-    environment:
-      - PLATFORMIO_RUN_JOBS=1         # ограничивает одновременные сборки ESPHome → ~350–400 MB пиков RAM  :contentReference[oaicite:1]{index=1}
-    # Жесткие лимиты:
-    mem_limit: 1200m
-    memswap_limit: 1800m
-    # Пределы CPU:
-    # Если вы используете docker-compose v2.x CLI:
-    cpus: 0.75
-    # Если переходите на версию 2.4+ ("Docker Compose V2"), можно переместить под deploy:
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 1200M
-    #       cpus: '0.75'
+    restart: unless-stopped
 
+    # (Добавляем/обновляем ресурсы):
+    mem_limit: 1500m
+    memswap_limit: 2500m
+    cpus: "1.5"
+
+    environment:
+      # Позволяет parallel сборку с 2 процессами
+      - PLATFORMIO_RUN_JOBS=2
