@@ -1,15 +1,29 @@
 version: '3.8'
 services:
   esphome:
+    image: esphome/esphome:latest   # → можно после тестирования заменить на стабильный тег 2025.6.0
     container_name: esphome
-    image: esphome/esphome:latest # Используем последний образ ESPHome
     volumes:
-      - /udobnidom/esphome/config:/config # Мапируем директорию для конфигураций ESPHome
-      - /etc/localtime:/etc/localtime:ro #<---Используем системное время Orange Pi
-      - /dev/ttyUSB0:/dev/ttyUSB0 # <-- Раскомментируй, если используешь USB-адаптер для прошивки
-      # Добавь другие /dev/ttyUSBx, если у тебя несколько адаптеров
-    network_mode: host #<---ВАЖНО: для OTA-обновлений и обнаружения устройств
+      - /udobnidom/esphome/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/ttyUSB0:/dev/ttyUSB0     # или добавить еще ttyUSB*, если нужно
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
     env_file:
       - stack.env
-    restart: unless-stopped
-    privileged: true #<---ВАЖНО: для доступа к USB-портам и полноценной работы в host-сети
+    environment:
+      - PLATFORMIO_RUN_JOBS=1         # ограничивает одновременные сборки ESPHome → ~350–400 MB пиков RAM  :contentReference[oaicite:1]{index=1}
+    # Жесткие лимиты:
+    mem_limit: 1200m
+    memswap_limit: 1800m
+    # Пределы CPU:
+    # Если вы используете docker-compose v2.x CLI:
+    cpus: 0.75
+    # Если переходите на версию 2.4+ ("Docker Compose V2"), можно переместить под deploy:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1200M
+    #       cpus: '0.75'
+
