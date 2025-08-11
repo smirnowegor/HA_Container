@@ -4,10 +4,11 @@ services:
   wud:
     image: getwud/wud:latest
     container_name: wud
-    network_mode: host      # <-- вот этот ключ!
+    ports:
+      - "3006:3000"  # 3006 — внешний порт, 3000 — внутренний у WUD
     environment:
       WUD_TRIGGER_MQTT_MOSQUITTO_URL: "mqtt://127.0.0.1:1883"
-      WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED:  "true"
+      WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED: "true"
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
