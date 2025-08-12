@@ -5,11 +5,17 @@ services:
     image: getwud/wud:latest
     container_name: wud
     ports:
-      - "3006:3000"  # 3006 — внешний порт, 3000 — внутренний у WUD
+      - "3006:3000" # внешний 3006, внутренний 3000 у WUD
     environment:
-      WUD_TRIGGER_MQTT_MOSQUITTO_URL: "mqtt://127.0.0.1:1883"
+      WUD_TRIGGER_MQTT_MOSQUITTO_URL: "mqtt://mosquitto:1883"  # имя контейнера брокера в сети
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_ENABLED: "true"
       WUD_TRIGGER_MQTT_MOSQUITTO_HASS_DISCOVERY: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - homeiot_internal
     restart: unless-stopped
+
+networks:
+  homeiot_internal:
+    external: true
