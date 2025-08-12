@@ -2,7 +2,7 @@ version: '3.8'
 services:
   homeassistant:
     container_name: homeassistant
-    image: homeassistant/home-assistant:stable # Используем стабильную версию Home Assistant
+    image: homeassistant/home-assistant:latest
     volumes:
       - /udobnidom/homeassistant/config:/config
       - /etc/localtime:/etc/localtime:ro
