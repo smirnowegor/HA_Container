@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  frigate:
+    container_name: frigate
+    # Используем образ с поддержкой Rockchip
+    image: ghcr.io/blakeblackshear/frigate:stable-rk
+    restart: unless-stopped
+    # Даем контейнеру максимальные привилегии в системе
+    privileged: true
+    # Новое: даем Frigate 30 секунд на корректное выключение
+    stop_grace_period: 30s
+    # Улучшенный синтаксис для разделяемой памяти
+    shm_size: '2g'
+    # Настройки безопасности, рекомендованные для Rockchip, на случай если они нужны даже в privileged режиме
+    security_opt:
+      - apparmor:unconfined
+      - systempaths:unconfined
+    # Добавляем пользователя контейнера в группу video (ID 109) для прямого доступа к устройствам
+    group_add:
+      - "109"
+    # Максимально полный список устройств: и общие, и конкретные.
+    devices:
+      # Общие группы устройств из новой документации
+      - /dev/dri
+      - /dev/dma_heap
+      - /dev/rga
+      - /dev/mpp_service
+      # Конкретные устройства из твоего оригинального файла для полной уверенности
+      - /dev/video-dec0
+      - /dev/video-enc0
+    # Максимально полный список томов
+    volumes:
+      # Синхронизация времени
+      - /etc/localtime:/etc/localtime:ro
+      # Доступ к системной информации (только чтение)
+      - /sys/:/sys/:ro
+      # Используем относительные пути для удобства переноса
+      - ./config:/config
+      - ./storage:/media/frigate
+      # Используем RAM для временных файлов, чтобы не изнашивать SD-карту/SSD
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 2147483648 # 2 GB
+    ports:
+      - "5000:5000"
+      - "1935:1935"
+      - "8554:8554"
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
