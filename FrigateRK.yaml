@@ -22,6 +22,8 @@ services:
       - /sys/:/sys/:ro
       # Конфиги и настройки → в /udobnidom/frigate/config
       - /udobnidom/frigate/config:/config
+      # Если нужно использовать НА конфиг 
+      - /udobnidom/homeassistant/config:/homeassistant:ro  
       # Записи → в стандартную /media/frigate
       - /media/frigate:/media/frigate
       # Кэш в RAM
