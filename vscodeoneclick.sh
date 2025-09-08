@@ -269,5 +269,7 @@ else
   echo "Файл конфигурации: $CFG_FILE"
   echo "Каталог установки (WorkingDirectory): $INSTALL_ROOT"
 fi
+# Удалить только .deb файлы (консервативно):
+run_with_spinner "Удаляю скачанные .deb из кеша code-server" "sudo rm -f /root/.cache/code-server/*.deb || true"
 
 LOG "Готово."
