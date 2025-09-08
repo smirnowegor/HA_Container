@@ -1,100 +1,154 @@
 #!/bin/bash
+set -euo pipefail
 
-# --- 1. Выясняем требования ---
+# vscodeoneclick.sh — расширенная версия с выбором места установки конфигурации code-server
+# Взято за основу: original script + выбор диска из fastDockerWb.sh
+# Источники: https://raw.githubusercontent.com/smirnowegor/HA_Container/.../vscodeoneclick.sh
+#           https://raw.githubusercontent.com/smirnowegor/ESP-WB/.../fastDockerWb.sh
+
+LOG() { echo -e "\e[1;32m[INFO]\e[0m $*"; }
+WARN() { echo -e "\e[1;33m[WARN]\e[0m $*"; }
+ERR() { echo -e "\e[1;31m[ERROR]\e[0m $*" >&2; exit 1; }
+
 echo "Привет! Мы сейчас обновим установку Code-Server."
-echo "Сначала мы проверим и удалим предыдущие версии, а затем установим новую."
-echo ""
 
-# Запрашиваем у пользователя пароль
+# --- Пароль ---
 read -s -p "Пожалуйста, введи ПАРОЛЬ для доступа к Code-Server: " USER_PASSWORD
 echo ""
 read -s -p "Пожалуйста, повтори ПАРОЛЬ: " USER_PASSWORD_CONFIRM
 echo ""
-
-# Проверяем, совпадают ли пароли
 while [ "$USER_PASSWORD" != "$USER_PASSWORD_CONFIRM" ]; do
-    echo "Пароли не совпадают. Пожалуйста, попробуй снова."
-    read -s -p "Пожалуйста, введи ПАРОЛЬ для доступа к Code-Server: " USER_PASSWORD
-    echo ""
-    read -s -p "Пожалуйста, повтори ПАРОЛЬ: " USER_PASSWORD_CONFIRM
-    echo ""
+  echo "Пароли не совпадают. Попробуй снова."
+  read -s -p "Пожалуйста, введи ПАРОЛЬ для доступа к Code-Server: " USER_PASSWORD
+  echo ""
+  read -s -p "Пожалуйста, повтори ПАРОЛЬ: " USER_PASSWORD_CONFIRM
+  echo ""
 done
-
 if [ -z "$USER_PASSWORD" ]; then
-    echo "Ошибка: Пароль не может быть пустым. Пожалуйста, запустите скрипт снова и введите пароль."
-    exit 1
+  ERR "Ошибка: Пароль не может быть пустым."
 fi
 
-# НОВОЕ: Запрашиваем у пользователя порт
+# --- Порт ---
 read -p "Пожалуйста, введи ПОРТ для Code-Server (по умолчанию 9091): " USER_PORT
-# Если пользователь ничего не ввел, используем 9091
 USER_PORT=${USER_PORT:-9091}
 
-echo "Начинаем процесс..."
 echo ""
+LOG "Начинаем процесс..."
 
-# --- 2. Проверка и удаление старых установок ---
-echo "Шаг 1/6: Проверка и удаление предыдущих установок Code-Server..."
+# --- Выбор места установки конфигурации (новое) ---
+LOG "Выбор места установки конфигурации code-server."
 
-# Останавливаем и отключаем сервис systemd, если он существует
+# Собираем подходящие монтирования (размер >1GB, исключая /boot)
+mapfile -t _options < <(df -B1 | awk 'NR>1 && $4 > 1073741824 && $6 !~ "^/boot" {printf "%s (%s free)\n", $6, substr($4/1073741824, 1, 4)"G"}' | sort -k2 -hr)
+
+# Добавим вариант "по умолчанию" (/root)
+_options+=("/root (по умолчанию)")
+
+if [ ${#_options[@]} -eq 0 ]; then
+  WARN "Не нашёл подходящих разделов. Использую /root."
+  INSTALL_ROOT="/root"
+else
+  echo "Выберите базовый каталог для установки конфигурации code-server:"
+  PS3="Введите номер и нажмите Enter: "
+  select opt in "${_options[@]}"; do
+    if [[ -n "$opt" ]]; then
+      # если выбран /root (наш вариант с пометкой)
+      if [[ "$opt" == "/root (по умолчанию)" ]]; then
+        INSTALL_ROOT="/root"
+      else
+        # извлечь путь /path (первый токен строки)
+        INSTALL_MOUNT=$(echo "$opt" | awk '{print $1}')
+        # по умолчанию будем создавать подпапку code-server на выбранном монтировании
+        INSTALL_ROOT="${INSTALL_MOUNT}/code-server"
+      fi
+      break
+    else
+      echo "Неверный выбор. Попробуйте снова."
+    fi
+  done
+fi
+
+LOG "Выбран каталог установки: $INSTALL_ROOT"
+
+# --- Проверки прав: создадим каталоги (потребуются sudo, если не root) ---
+create_dir() {
+  target="$1"
+  if [ ! -d "$target" ]; then
+    LOG "Создаю каталог: $target"
+    sudo mkdir -p "$target"
+  fi
+  # установить владельца root, права 755 (безопасно для сервисов)
+  sudo chown root:root "$target"
+  sudo chmod 0755 "$target"
+}
+
+# создаём структуру
+create_dir "$INSTALL_ROOT"
+create_dir "${INSTALL_ROOT}/.config"
+create_dir "${INSTALL_ROOT}/.config/code-server"
+create_dir "${INSTALL_ROOT}/.local"
+create_dir "${INSTALL_ROOT}/.local/bin"
+
+# --- Резервная копия существующей конфигурации в /root/.config/code-server (если есть) ---
+ROOT_CONFIG_DIR="/root/.config"
+ROOT_CS_DIR="${ROOT_CONFIG_DIR}/code-server"
+if [ -e "$ROOT_CS_DIR" ] && [ ! -L "$ROOT_CS_DIR" ]; then
+  TS=$(date +%Y%m%d%H%M%S)
+  BACKUP="/root/.config_code-server_backup_${TS}"
+  LOG "Найдена существующая конфигурация $ROOT_CS_DIR — делаю бэкап в $BACKUP"
+  sudo mv "$ROOT_CS_DIR" "$BACKUP"
+fi
+
+# создаём /root/.config (если нет) и ставим symlink на выбранную папку (только code-server)
+if [ ! -d "$ROOT_CONFIG_DIR" ]; then
+  LOG "Создаю $ROOT_CONFIG_DIR"
+  sudo mkdir -p "$ROOT_CONFIG_DIR"
+  sudo chown root:root "$ROOT_CONFIG_DIR"
+  sudo chmod 0755 "$ROOT_CONFIG_DIR"
+fi
+
+# если уже есть link — удалим и пересоздадим
+if [ -L "$ROOT_CS_DIR" ]; then
+  LOG "Пересоздаю символьную ссылку для /root/.config/code-server"
+  sudo rm -f "$ROOT_CS_DIR"
+fi
+
+LOG "Создаю символьную ссылку: $ROOT_CS_DIR -> ${INSTALL_ROOT}/.config/code-server"
+sudo ln -sfn "${INSTALL_ROOT}/.config/code-server" "$ROOT_CS_DIR"
+sudo chown -h root:root "$ROOT_CS_DIR" || true
+
+# --- Шаг 1: удаление старых сервисов/файлов (по оригиналу) ---
+LOG "Проверка и удаление предыдущих установок Code-Server (если есть)..."
+
 if sudo systemctl is-active --quiet code-server@root; then
-    echo "Останавливаем сервис code-server@root..."
-    sudo systemctl stop code-server@root
+  LOG "Останавливаем service code-server@root..."
+  sudo systemctl stop code-server@root || true
 fi
-
 if sudo systemctl is-enabled --quiet code-server@root; then
-    echo "Отключаем автозапуск code-server@root..."
-    sudo systemctl disable code-server@root
-    # НОВОЕ: Перезагружаем systemd, чтобы он забыл о сервисе, если он был включен
-    sudo systemctl daemon-reload
-    echo "Автозапуск code-server@root отключен и systemd перезагружен."
+  LOG "Отключаем автозапуск..."
+  sudo systemctl disable code-server@root || true
+  sudo systemctl daemon-reload || true
 fi
-
-# Удаляем файл сервиса systemd
 if [ -f "/etc/systemd/system/code-server@.service" ]; then
-    echo "Удаляем файл сервиса systemd..."
-    sudo rm /etc/systemd/system/code-server@.service
-    sudo systemctl daemon-reload # Перезагружаем systemd, чтобы он забыл о старом сервисе
-    echo "Файл сервиса systemd удален и systemd перезагружен."
+  LOG "Удаляю старый systemd unit..."
+  sudo rm -f /etc/systemd/system/code-server@.service
+  sudo systemctl daemon-reload || true
 fi
 
-# НОВОЕ: Удаляем файл конфигурации Code-Server (ГАРАНТИРУЕМ УДАЛЕНИЕ ПАРОЛЯ)
-CONFIG_FILE="/root/.config/code-server/config.yaml"
-if [ -f "$CONFIG_FILE" ]; then
-    echo "Удаляем старый файл конфигурации Code-Server ($CONFIG_FILE)..."
-    sudo rm "$CONFIG_FILE"
-    echo "Файл конфигурации удален."
+# удаляем старые конфиги в стандартном месте (если требуется)
+if [ -f "/root/.config/code-server/config.yaml" ]; then
+  LOG "Удаляю старый конфиг /root/.config/code-server/config.yaml"
+  sudo rm -f /root/.config/code-server/config.yaml || true
 fi
 
-# Удаляем каталог конфигурации Code-Server
-CONFIG_DIR="/root/.config/code-server"
-if [ -d "$CONFIG_DIR" ]; then
-    echo "Удаляем каталог конфигурации Code-Server ($CONFIG_DIR)..."
-    sudo rm -rf "$CONFIG_DIR"
-    echo "Каталог конфигурации удален."
-fi
+# --- Шаг 2: установка code-server ---
+LOG "Устанавливаю code-server (официальный install.sh)..."
+# установка official script; если не нужна - можно заменить другим способом
+curl -fsSL https://code-server.dev/install.sh | sh || { ERR "Не удалось установить code-server."; }
 
-# Удаляем исполняемый файл Code-Server, если он в ~/.local/bin
-CODE_SERVER_BIN="$HOME/.local/bin/code-server"
-if [ -f "$CODE_SERVER_BIN" ]; then
-    echo "Удаляем исполняемый файл Code-Server ($CODE_SERVER_BIN)..."
-    rm "$CODE_SERVER_BIN"
-    echo "Исполняемый файл Code-Server удален."
-fi
-
-echo "Предыдущие установки Code-Server удалены (если они были)."
-echo ""
-
-# --- 3. Установка Code-Server ---
-# Используем официальный скрипт установки
-echo "Шаг 2/6: Установка Code-Server..."
-curl -fsSL https://code-server.dev/install.sh | sh || { echo "Ошибка: Не удалось установить Code-Server. Проверьте подключение к интернету или права доступа."; exit 1; }
-echo "Code-Server успешно установлен."
-echo ""
-
-# --- 4. Настройка автозапуска через systemd ---
-echo "Шаг 3/6: Настройка автозапуска Code-Server через systemd..."
-sudo tee /etc/systemd/system/code-server@.service > /dev/null << 'EOF'
+# --- Шаг 3: создаём systemd unit с WorkingDirectory = INSTALL_ROOT ---
+LOG "Создаю systemd unit для code-server (WorkingDirectory: $INSTALL_ROOT)..."
+sudo tee /etc/systemd/system/code-server@.service > /dev/null <<EOF
 [Unit]
 Description=code-server for %i
 After=network.target
@@ -103,89 +157,57 @@ After=network.target
 Type=simple
 User=%i
 Group=%i
-WorkingDirectory=/root
-ExecStart=/usr/bin/code-server # Убедись, что это правильный путь к исполняемому файлу code-server
+WorkingDirectory=$INSTALL_ROOT
+ExecStart=/usr/bin/code-server
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
-echo "Файл сервиса systemd создан."
-echo ""
 
-# --- 5. Настройка Code-Server (установка пароля и порта) ---
-echo "Шаг 4/6: Настройка Code-Server (установка пароля и порта)..."
-
-# Запускаем Code-Server один раз для создания конфигурационных файлов
-echo "Запускаем Code-Server временно, чтобы он создал конфигурационные файлы..."
-# НОВОЕ: Добавим `|| true` на случай, если code-server не запустится с первого раза
+# --- Шаг 4: Запуск один раз, чтобы создались файлы (как в оригинале) ---
+LOG "Пробуем запустить сервис temporariy чтобы создать файлы..."
+sudo systemctl daemon-reload || true
 sudo systemctl start code-server@root || true
+sleep 3
+sudo systemctl stop code-server@root || true
+sleep 1
 
-# Даем Code-Server время на создание файлов
-echo "Ждем несколько секунд, пока Code-Server создаст файлы..."
-sleep 5
+# --- Шаг 5: Создаём config.yaml в выбранном месте (INSTALL_ROOT/.config/code-server/config.yaml) ---
+CFG_FILE="${INSTALL_ROOT}/.config/code-server/config.yaml"
+LOG "Создаю конфиг $CFG_FILE"
+sudo mkdir -p "$(dirname "$CFG_FILE")"
+sudo tee "$CFG_FILE" > /dev/null <<EOC
+bind-addr: 0.0.0.0:$USER_PORT
+auth: password
+password: $USER_PASSWORD
+cert: false
+EOC
+sudo chown root:root "$CFG_FILE"
+sudo chmod 0600 "$CFG_FILE"
 
-# Останавливаем службу Code-Server
-echo "Останавливаем службу Code-Server для редактирования конфигурации..."
-sudo systemctl stop code-server@root || true # НОВОЕ: || true, чтобы скрипт не падал, если сервис уже не активен
-sleep 2
+# --- Шаг 6: перезагрузка systemd, запуск и включение автозапуска ---
+LOG "Перезагружаю systemd и запускаю сервис..."
+sudo systemctl daemon-reload || { ERR "Не удалось reload systemd"; }
+sudo systemctl start code-server@root || { ERR "Не удалось стартовать code-server@root. Проверьте /var/log/syslog или journalctl -u code-server@root."; }
+sudo systemctl enable code-server@root || WARN "Не удалось включить автозапуск. Возможно уже включён."
 
-# Проверяем существование каталога и создаем его, если он не существует
-CONFIG_DIR="/root/.config/code-server"
-if [ ! -d "$CONFIG_DIR" ]; then
-    echo "Каталог конфигурации $CONFIG_DIR не найден, создаем его..."
-    sudo mkdir -p "$CONFIG_DIR" || { echo "Ошибка: Не удалось создать каталог конфигурации $CONFIG_DIR. Проверьте права доступа."; exit 1; }
-    sudo chown root:root "$CONFIG_DIR" # Убедимся, что владельцем является root
-fi
-
-CONFIG_FILE="/root/.config/code-server/config.yaml"
-
-# Создаем файл config.yaml, если он не существует.
-# Это уже не так критично, так как мы его удаляем в начале,
-# но хорошая практика на случай, если удаление не сработало по какой-то причине.
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Файл конфигурации $CONFIG_FILE не найден, создаем его..."
-    sudo touch "$CONFIG_FILE" || { echo "Ошибка: Не удалось создать файл конфигурации $CONFIG_FILE. Проверьте права доступа."; exit 1; }
-    sudo chown root:root "$CONFIG_FILE" # Убедимся, что владельцем является root
-fi
-
-echo "Редактируем файл конфигурации $CONFIG_FILE..."
-
-# ИСПРАВЛЕНИЕ: Используем переменные $USER_PORT и $USER_PASSWORD
-# Используем sudo sh -c для записи в файл от имени root
-sudo sh -c "echo 'bind-addr: 0.0.0.0:$USER_PORT' > $CONFIG_FILE"
-sudo sh -c "echo 'auth: password' >> $CONFIG_FILE"
-sudo sh -c "echo 'password: $USER_PASSWORD' >> $CONFIG_FILE" # ВОТ ЗДЕСЬ ИСПРАВЛЕНИЕ ПАРОЛЯ
-sudo sh -c "echo 'cert: false' >> $CONFIG_FILE"
-
-echo "Файл конфигурации обновлен."
-echo ""
-
-# --- 6. Активация и запуск сервиса Code-Server ---
-echo "Шаг 5/6: Активация и запуск сервиса Code-Server..."
-sudo systemctl daemon-reload || { echo "Ошибка: Не удалось перезагрузить systemd daemon. Проверьте конфигурацию systemd."; exit 1; }
-sudo systemctl start code-server@root || { echo "Ошибка: Не удалось запустить service code-server@root. Проверьте логи systemd."; exit 1; }
-sudo systemctl enable code-server@root || { echo "Ошибка: Не удалось включить автозапуск code-server@root. Возможно, сервис уже включен."; }
-echo "Сервис Code-Server запущен и включен для автозапуска."
-echo ""
-
-# --- 7. Проверка доступа к Code-Server ---
-echo "Шаг 6/6: Проверка доступа к Code-Server..."
-
-# Получаем IP-адрес сервера
-IP_ADDRESS=$(hostname -I | awk '{print $1}')
-
+# --- Шаг 7: Уведомление пользователю ---
+IP_ADDRESS=$(hostname -I | awk '{print $1}' || true)
 if [ -z "$IP_ADDRESS" ]; then
-    echo "Не удалось автоматически определить IP-адрес. Пожалуйста, найдите его вручную (например, с помощью команды ip a или ifconfig)."
-    echo "Порт для доступа: $USER_PORT"
-    echo "Формат ссылки: http://<ВАШ_IP_АДРЕС>:$USER_PORT"
+  echo ""
+  echo "Установка завершена. Порт: $USER_PORT"
+  echo "Файл конфигурации: $CFG_FILE"
+  echo "Сервис работает: systemctl status code-server@root"
 else
-    echo "Установка завершена! Code-Server должен быть доступен по следующей ссылке:"
-    echo "------------------------------------------------------"
-    echo "                   http://$IP_ADDRESS:$USER_PORT            "
-    echo "------------------------------------------------------"
-    echo "Используй введенный тобой пароль для входа."
+  echo ""
+  echo "Установка завершена! Доступно по адресу:"
+  echo "------------------------------------------------------"
+  echo " http://$IP_ADDRESS:$USER_PORT "
+  echo "------------------------------------------------------"
+  echo "Пароль — тот, который вы ввели."
+  echo "Файл конфигурации: $CFG_FILE"
+  echo "Каталог установки (WorkingDirectory): $INSTALL_ROOT"
 fi
 
-echo ""
-echo "Спасибо за использование скрипта!!!!!!!!!!!!!!! Заходи на мой канал -  https://t.me/u2smart4home  Там еще больше автоматизаций"
+LOG "Готово."
