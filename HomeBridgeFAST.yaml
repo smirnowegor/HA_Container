@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  homebridge:
+    container_name: homebridge
+    image: homebridge/homebridge:latest
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - /udobnidom/homebridge/config:/homebridge
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Europe/Moscow
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8581"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
