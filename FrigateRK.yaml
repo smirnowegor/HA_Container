@@ -9,15 +9,6 @@ services:
     network_mode: host
     stop_grace_period: 30s
     shm_size: '2g'
-    group_add:
-      - "109"
-    devices:
-      - /dev/dri
-      - /dev/dma_heap
-      - /dev/rga
-      - /dev/mpp_service
-      - /dev/video-dec0
-      - /dev/video-enc0
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /sys/:/sys/:ro
@@ -39,47 +30,13 @@ services:
       # Если используете RTSP с авторизацией:
       # FRIGATE_RTSP_USER: "rtsp_user"
       # FRIGATE_RTSP_PASSWORD: "rtsp_password"
-
-
-
-
-# version: "3.9"
-
-# services:
-#   frigate:
-#     container_name: frigate
-#     image: ghcr.io/blakeblackshear/frigate:stable-rk
-#     restart: unless-stopped
-#     privileged: true
-#     stop_grace_period: 30s
-#     shm_size: '2g'
-#     group_add:
-#       - "109"
-#     devices:
-#       - /dev/dri
-#       - /dev/dma_heap
-#       - /dev/rga
-#       - /dev/mpp_service
-#       - /dev/video-dec0
-#       - /dev/video-enc0
-#     volumes:
-#       - /etc/localtime:/etc/localtime:ro
-#       - /sys/:/sys/:ro
-#       # Конфиги и настройки → в /udobnidom/frigate/config
-#       - /udobnidom/frigate/config:/config
-#       # Если нужно использовать НА конфиг 
-#       - /udobnidom/homeassistant/config:/homeassistant:ro  
-#       # Записи → в стандартную /media/frigate
-#       - /media/frigate:/media/frigate
-#       # Кэш в RAM
-#       - type: tmpfs
-#         target: /tmp/cache
-#         tmpfs:
-#           size: 2147483648 # 2 GB
-#     ports:
-#       - "1984:1984"
-#       - "5000:5000"
-#       - "1935:1935"
-#       - "8554:8554"
-#       - "8555:8555/tcp"
-#       - "8555:8555/udp"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
