@@ -58,7 +58,7 @@ version: '3.8'
 services:
   portainer:
     container_name: portainer
-    image: portainer/portainer-ce:2.31.3
+    image: portainer/portainer-ce:latest
     command: -H unix:///var/run/docker.sock
     restart: always
     ports:
