@@ -12,6 +12,7 @@ services:
       - MQTT_SERVER=mqtt://mosquitto
     ports:
       - "8080:8080"
+      - "8099:8099"
     restart: unless-stopped
     privileged: true
     networks:
