@@ -59,16 +59,21 @@ check_binary_arch() {
     if [ ! -f "$node_path" ]; then
         return 1
     fi
-    # Проверяем ELF заголовок на соответствие архитектуре
-    local arch_code=$(od -An -t x1 -j 18 -N 1 "$node_path" | tr -d ' ')
+    # Проверяем архитектуру с помощью file
+    if ! command -v file >/dev/null 2>&1; then
+        LOG "Команда file не найдена, пропускаем проверку архитектуры"
+        return 0
+    fi
+    local arch_info=$(file "$node_path")
     case "$ARCH" in
         aarch64)
-            # ARM64 = 0xb7 (183)
-            [ "$arch_code" = "b7" ] && return 0 || return 1
+            echo "$arch_info" | grep -q "ARM aarch64\|AArch64" && return 0 || return 1
             ;;
         x86_64)
-            # x86-64 = 0x3e (62)
-            [ "$arch_code" = "3e" ] && return 0 || return 1
+            echo "$arch_info" | grep -q "x86-64\|AMD64" && return 0 || return 1
+            ;;
+        armv7l)
+            echo "$arch_info" | grep -q "ARM\|arm" && return 0 || return 1
             ;;
         *) return 0 ;; # Для других архитектур пропускаем проверку
     esac
