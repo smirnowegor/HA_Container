@@ -35,6 +35,8 @@ get_serial_path() {
 # --- 1. Настройка Mosquitto ---
 echo "--- 1. Настройка Mosquitto ---"
 sudo mkdir -p /udobnidom/mosquitto/{config,data,logs}
+# Устанавливаем права для пользователя mosquitto (UID 1883)
+sudo chown -R 1883:1883 /udobnidom/mosquitto/data /udobnidom/mosquitto/logs 2>/dev/null || sudo chmod -R 777 /udobnidom/mosquitto/data /udobnidom/mosquitto/logs
 
 cat <<EOF | sudo tee /udobnidom/mosquitto/config/mosquitto.conf >/dev/null
 persistence true
