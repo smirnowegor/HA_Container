@@ -59,24 +59,11 @@ check_binary_arch() {
     if [ ! -f "$node_path" ]; then
         return 1
     fi
-    # Проверяем архитектуру с помощью file
-    if ! command -v file >/dev/null 2>&1; then
-        LOG "Команда file не найдена, пропускаем проверку архитектуры"
-        return 0
+    # Пробуем запустить node --version для проверки
+    if ! "$node_path" --version >/dev/null 2>&1; then
+        return 1
     fi
-    local arch_info=$(file "$node_path")
-    case "$ARCH" in
-        aarch64)
-            echo "$arch_info" | grep -q "ARM aarch64\|AArch64" && return 0 || return 1
-            ;;
-        x86_64)
-            echo "$arch_info" | grep -q "x86-64\|AMD64" && return 0 || return 1
-            ;;
-        armv7l)
-            echo "$arch_info" | grep -q "ARM\|arm" && return 0 || return 1
-            ;;
-        *) return 0 ;; # Для других архитектур пропускаем проверку
-    esac
+    return 0
 }
 
 LOG "Скачивание code-server для $PLATFORM..."
