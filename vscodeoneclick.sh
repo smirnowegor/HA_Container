@@ -88,7 +88,7 @@ curl -fsSL "$URL" | tar -xz --strip-components=1 -C "$TEMP_DIR"
 
 # Проверяем архитектуру скачанного бинарника
 if ! check_binary_arch "$TEMP_DIR"; then
-    ERR "Latest релиз имеет неверную архитектуру (ожидалась $ARCH). Пробуем fallback версию v4.98.2..."
+    LOG "Latest релиз имеет неверную архитектуру (ожидалась $ARCH). Пробуем fallback версию v4.98.2..."
     rm -rf "$TEMP_DIR"/*
     FALLBACK_URL="https://github.com/coder/code-server/releases/download/v4.98.2/code-server-4.98.2-${PLATFORM}.tar.gz"
     curl -fsSL "$FALLBACK_URL" | tar -xz --strip-components=1 -C "$TEMP_DIR"
