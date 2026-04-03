@@ -52,11 +52,59 @@ case "$ARCH" in
     x86_64)   PLATFORM="linux-amd64" ;;
     *) ERR "Неизвестная архитектура: $ARCH" ;;
 esac
+
+# Функция для проверки архитектуры бинарника
+check_binary_arch() {
+    local node_path="$1/lib/node"
+    if [ ! -f "$node_path" ]; then
+        return 1
+    fi
+    # Проверяем ELF заголовок на соответствие архитектуре
+    local arch_code=$(od -An -t x1 -j 18 -N 1 "$node_path" | tr -d ' ')
+    case "$ARCH" in
+        aarch64)
+            # ARM64 = 0xb7 (183)
+            [ "$arch_code" = "b7" ] && return 0 || return 1
+            ;;
+        x86_64)
+            # x86-64 = 0x3e (62)
+            [ "$arch_code" = "3e" ] && return 0 || return 1
+            ;;
+        *) return 0 ;; # Для других архитектур пропускаем проверку
+    esac
+}
+
+LOG "Скачивание code-server для $PLATFORM..."
+
+# Сначала пробуем latest релиз
 URL=$(curl -s https://api.github.com/repos/coder/code-server/releases/latest \
     | grep "browser_download_url" \
     | grep "$PLATFORM" \
     | cut -d '"' -f 4)
-curl -fsSL "$URL" | tar -xz --strip-components=1 -C "$INSTALL_DIR"
+
+# Временная директория для проверки
+TEMP_DIR=$(mktemp -d)
+curl -fsSL "$URL" | tar -xz --strip-components=1 -C "$TEMP_DIR"
+
+# Проверяем архитектуру скачанного бинарника
+if ! check_binary_arch "$TEMP_DIR"; then
+    ERR "Latest релиз имеет неверную архитектуру (ожидалась $ARCH). Пробуем fallback версию v4.98.2..."
+    rm -rf "$TEMP_DIR"/*
+    FALLBACK_URL="https://github.com/coder/code-server/releases/download/v4.98.2/code-server-4.98.2-${PLATFORM}.tar.gz"
+    curl -fsSL "$FALLBACK_URL" | tar -xz --strip-components=1 -C "$TEMP_DIR"
+    
+    if ! check_binary_arch "$TEMP_DIR"; then
+        ERR "Fallback версия тоже имеет неверную архитектуру. Проверьте архитектуру системы."
+    fi
+    LOG "Используем fallback версию v4.98.2"
+else
+    LOG "Latest релиз успешно проверен"
+fi
+
+# Копируем в целевую директорию
+rm -rf "$INSTALL_DIR"/*
+cp -r "$TEMP_DIR"/* "$INSTALL_DIR/"
+rm -rf "$TEMP_DIR"
 
 # --- Симлинк ---
 ln -sf "$INSTALL_DIR/bin/code-server" /usr/local/bin/code-server
@@ -77,7 +125,7 @@ Description=code-server
 After=network.target
 
 [Service]
-Type=simple
+Type=exec
 User=root
 WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/bin/code-server --config $INSTALL_DIR/config/config.yaml
